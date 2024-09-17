@@ -1,0 +1,189 @@
+---
+title: "441 Project -- Supervised Learning (Data Cleaning + Importance)"
+author: "Tianyi Wu"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+# preprocessing
+
+## Loading and overview
+
+```{r}
+X_train <- read.csv("X_train.csv")
+head(X_train)
+```
+
+```{r}
+X_test <- read.csv("X_test.csv")
+head(X_test)
+```
+
+```{r}
+y_train <- read.csv("y_train.csv")
+head(y_train)
+```
+
+## X train
+
+```{r}
+# missing values
+sum(colSums(sapply(X_train,is.na)))
+```
+
+```{r}
+X_train[!complete.cases(X_train), ]
+missing_id <- X_train[!complete.cases(X_train), ]$id
+```
+
+Find the corresponding label of observations with NA
+
+```{r}
+y_train[y_train$id %in% missing_id, ]
+```
+
+Since there are only 8 rows with NA, it's reasonable to just exclude those observations.
+
+**Checking data type**
+
+```{r}
+library(dplyr)
+numeric_var = select_if(X_train, is.numeric)
+char_var = select_if(X_train, is.character)
+```
+
+```{r}
+dim(numeric_var)
+```
+
+```{r}
+dim(char_var)
+summary(char_var)
+```
+
+## X test
+
+```{r}
+# missing values
+sum(colSums(sapply(X_test,is.na)))
+```
+
+```{r}
+test_miss_id <- X_test[!complete.cases(X_test), ]$id
+test_miss_id
+# fill the NA in v233b_r with -3 (not applicable)
+X_test[X_test$id == test_miss_id,]$v233b_r = -3
+write.csv(X_test, "X_test_filled.csv", row.names = FALSE)
+```
+
+## y_train
+
+```{r}
+# distribution of the labels
+hist(y_train$label, xlab = "lables")
+```
+
+# Variable Importance
+
+## Random Forest
+
+```{r}
+# omit NA in X_train and y_train
+X_train <- na.omit(X_train)
+write.csv(y_train[!y_train$id %in% missing_id, ]$label,
+          "full_y.csv", row.names = FALSE)
+# treat lables as factors
+y_train_label <- as.factor(y_train[!y_train$id %in% missing_id, ]$label)
+```
+
+```{r, eval=FALSE}
+library(randomForest)
+r_full <- randomForest(x = X_train, y = y_train_label,importance=TRUE)
+```
+
+```{r}
+importance_full <- importance(r_full, type = 1) # mean decrease in accuracy
+ordered_indices <- order(-importance_full)
+
+# Sort the importances and get the corresponding names
+sorted_importances <- importance_full[ordered_indices]
+sorted_names <- row.names(importance_full)[ordered_indices]
+
+# For top 1-100
+full_top_100 <- sorted_importances[1:100]
+full100_names <- sorted_names[1:100]
+
+# For 101-200
+full_100_200 <- sorted_importances[101:200]
+full100_200_names <- sorted_names[101:200]
+
+# For 201-300
+full_200_300 <- sorted_importances[201:300]
+full200_300_names <- sorted_names[201:300]
+
+# For 301-438
+full_300_438 <- sorted_importances[301:438]
+full300_438_names <- sorted_names[301:438]
+
+barplot(full_top_100, names.arg = full100_names, las = 2, 
+        main = "Top 100 Variable Importance -- Random Forest",
+        ylab = "Importance", cex.names = 0.35)
+barplot(full_100_200, names.arg = full100_200_names, las = 2, 
+        main = "Top 101 - 200 Variable Importance -- Random Forest",
+        ylab = "Importance", cex.names = 0.35, ylim = c(0, 40))
+barplot(full_200_300, names.arg = full200_300_names, las = 2, 
+        main = "Top 201 - 300 Variable Importance -- Random Forest",
+        ylab = "Importance", cex.names = 0.35, ylim = c(0, 40))
+barplot(full_300_438, names.arg = full300_438_names, las = 2, 
+        main = "Top 301 - 438 Variable Importance -- Random Forest",
+        ylab = "Importance", cex.names = 0.35, ylim = c(0, 40))
+
+```
+
+```{r}
+# output to csv
+importance_df <- data.frame(Variable = rownames(importance_full),
+                            Importance = importance_full[, 1])
+write.csv(importance_df, "variable_importance.csv", row.names = FALSE)
+```
+
+```{r}
+# select positive importance
+nonneg_impor_df <- subset(importance_df, Importance >= 0)
+# calculate mean
+avg_nonneg <- mean(nonneg_impor_df$Importance)
+
+avg_nonneg
+```
+
+```{r}
+barplot(full_top_100, names.arg = full100_names, las = 2, 
+        main = "Top 100 Variable Importance -- Random Forest",
+        ylab = "Importance", cex.names = 0.3)
+abline(h = avg_nonneg, col = "red")
+barplot(full_100_200, names.arg = full100_200_names, las = 2, 
+        main = "Top 101 - 200 Variable Importance -- Random Forest",
+        ylab = "Importance", cex.names = 0.3, ylim = c(0, 40))
+abline(h = avg_nonneg, col = "red")
+```
+
+```{r}
+full100_names[1:30]
+```
+
+# Final Dataset with important variables only
+
+-   **This is what's used for modeling**
+-   **Variable selected based on importance result from random forest and manual inspection**
+
+```{r}
+set.seed(441)
+baisc_var_2 <- c("v63", "v5", "v54", "v64", "v115", "v56", "v57", "v93", "v52_cs", "v154",
+               "v277", "v62", "v243_cs", "age", "v196", "v3", "v261_ppp","v52","v60",
+               "v263_cs", "v52", "v134", "v153", "v4", "v160", "v158", "v2", "v156", "v155", "v161") 
+# 30 predictors
+X_train_30 <- X_train[baisc_var_2]
+write.csv(X_train_30, "X_train_30.csv", row.names = FALSE)
+X_test_30 <- X_test[baisc_var_2]
+write.csv(X_test_30, "X_test_30.csv", row.names = FALSE)
+```
