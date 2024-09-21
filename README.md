@@ -11,4 +11,4 @@ Using a dataset with 48,000 entries and 400+ variables to predict answers to the
 
 ## Side Notes
 - This was a team project (team of 3)
-- Code need further organization  
+- Code need further clean up  
